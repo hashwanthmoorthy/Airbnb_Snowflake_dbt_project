@@ -1,0 +1,63 @@
+# =============================================================================
+# PROJECT CONFIGURATION
+# =============================================================================
+
+# Project name - use only lowercase characters and underscores
+# Should reflect your organization or intended use
+name: 'aws_dbt_snowflake_project'
+version: '1.0.0'
+
+# Which profile from profiles.yml to use for database connection
+profile: 'aws_dbt_snowflake_project'
+
+# =============================================================================
+# PATH CONFIGURATIONS
+# =============================================================================
+
+# Where dbt should look for different types of files
+model-paths: ["models"]           # SQL models (your transformations)
+analysis-paths: ["analyses"]      # Ad-hoc analytical queries
+test-paths: ["tests"]             # Custom data tests
+seed-paths: ["seeds"]             # CSV files to load as tables
+macro-paths: ["macros"]           # Reusable Jinja macros
+snapshot-paths: ["snapshots"]     # SCD Type 2 snapshot definitions
+
+# Directories removed when running `dbt clean`
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# =============================================================================
+# MODEL CONFIGURATIONS
+# =============================================================================
+
+# Configure materialization and schema for each folder in models/
+# Materialization options: table, view, incremental, ephemeral
+
+models:
+  aws_dbt_snowflake_project:
+
+    # Example models (demo/learning)
+    example:
+      demo:
+        +materialized: table
+
+    # Bronze layer - raw data landing zone (1:1 copy from source)
+    bronze:
+      +materialized: table
+      +schema: bronze
+
+    # Silver layer - cleaned and transformed data
+    silver:
+      +materialized: incremental    # Only process new/changed records
+      +schema: silver
+
+    # Gold layer - business-ready, aggregated data
+    gold:
+      +materialized: table
+      +schema: gold
+
+      # Ephemeral subfolder - models that don't create tables
+      # These are inlined as CTEs into downstream models
+      ephemeral:
+        +materialized: ephemeral

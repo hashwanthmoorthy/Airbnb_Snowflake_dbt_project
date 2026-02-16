@@ -1,0 +1,11 @@
+models:
+  # Add documentation or tests
+  - name: bronze_listings
+    config:
+      materialized: table
+  - name: bronze_hosts
+    config:
+      materialized: table
+  - name: bronze_bookings
+    config:
+      materialized: table

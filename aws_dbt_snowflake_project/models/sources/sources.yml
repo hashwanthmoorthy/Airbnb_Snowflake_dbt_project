@@ -1,0 +1,11 @@
+sources:
+  - name: staging
+    database: AIRBNB
+    schema: staging
+    tables:
+      # Generate model
+      - name: listings
+      # Generate model
+      - name: bookings
+      # Generate model
+      - name: hosts
