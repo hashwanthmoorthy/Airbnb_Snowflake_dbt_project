@@ -189,28 +189,7 @@ Understanding why dbt only needs SELECT statements:
 
 ### High-Level Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              DATA PIPELINE                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────┐      ┌──────────────┐      ┌─────────────────────────────────┐
-│              │      │              │      │           SNOWFLAKE             │
-│    AWS S3    │      │  Snowflake   │      │    ┌───────────────────────┐    │
-│              │      │   External   │      │    │      dbt Models       │    │
-│  ┌────────┐  │      │    Stage     │      │    │                       │    │
-│  │listings│  │      │              │      │    │  Bronze ──▶ Silver    │    │
-│  │.csv    │  │ ───▶ │   (IAM +     │ ───▶ │    │              │        │    │
-│  ├────────┤  │      │   STAGE)     │      │    │              ▼        │    │
-│  │bookings│  │      │              │      │    │           Gold(OBT)   │    │
-│  │.csv    │  │      │              │      │    │              │        │    │
-│  ├────────┤  │      │              │      │    │              ▼        │    │
-│  │hosts   │  │      │              │      │    │         Snapshots     │    │
-│  │.csv    │  │      │              │      │    └───────────────────────┘    │
-│  └────────┘  │      │              │      │                                 │
-└──────────────┘      └──────────────┘      └─────────────────────────────────┘
-     SOURCE              STAGING                    TRANSFORMATION
-```
+![Data Pipeline Architecture](architecture.png)
 
 ### Why This Architecture?
 
