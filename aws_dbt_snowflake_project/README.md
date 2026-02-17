@@ -191,6 +191,64 @@ Understanding why dbt only needs SELECT statements:
 
 ![Data Pipeline Architecture](architecture.png)
 
+### Data Model (Staging Tables)
+
+The raw data consists of 3 tables representing an Airbnb-like booking system:
+
+**HOSTS**
+| Column | Type | Description |
+|--------|------|-------------|
+| host_id | NUMBER | Primary Key |
+| host_name | STRING | Host's name |
+| host_since | DATE | Date host joined |
+| is_superhost | BOOLEAN | Superhost status |
+| response_rate | NUMBER | Response rate percentage |
+| created_at | TIMESTAMP | Record creation time |
+
+**LISTINGS**
+| Column | Type | Description |
+|--------|------|-------------|
+| listing_id | NUMBER | Primary Key |
+| host_id | NUMBER | Foreign Key to HOSTS |
+| property_type | STRING | Type of property |
+| room_type | STRING | Type of room |
+| city | STRING | City location |
+| country | STRING | Country location |
+| accommodates | NUMBER | Number of guests |
+| bedrooms | NUMBER | Number of bedrooms |
+| bathrooms | NUMBER | Number of bathrooms |
+| price_per_night | NUMBER | Nightly price |
+| created_at | TIMESTAMP | Record creation time |
+
+**BOOKINGS**
+| Column | Type | Description |
+|--------|------|-------------|
+| booking_id | STRING | Primary Key |
+| listing_id | NUMBER | Foreign Key to LISTINGS |
+| booking_date | TIMESTAMP | Date of booking |
+| nights_booked | NUMBER | Number of nights |
+| booking_amount | NUMBER | Base booking amount |
+| cleaning_fee | NUMBER | Cleaning fee |
+| service_fee | NUMBER | Service fee |
+| booking_status | STRING | Booking status |
+| created_at | TIMESTAMP | Record creation time |
+
+### Entity Relationship
+
+```
+┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+│    HOSTS    │       │  LISTINGS   │       │  BOOKINGS   │
+├─────────────┤       ├─────────────┤       ├─────────────┤
+│ host_id (PK)│◄──────│ host_id(FK) │       │ booking_id  │
+│ host_name   │       │ listing_id  │◄──────│ listing_id  │
+│ host_since  │       │ property... │       │ nights...   │
+│ is_superhost│       │ price...    │       │ amount...   │
+└─────────────┘       └─────────────┘       └─────────────┘
+      1                     M                     M
+      └────────────────────┘└─────────────────────┘
+           One-to-Many            One-to-Many
+```
+
 ### Why This Architecture?
 
 | Component | Purpose | Why This Choice? |
@@ -414,57 +472,113 @@ IAM (Identity and Access Management) allows Snowflake to securely access S3 with
 
 ### Step 2: Snowflake Configuration
 
-**2.1 Create Database and Schemas**
+**2.1 Create Database and Schema**
 
 ```sql
 -- Create the main database
 CREATE DATABASE AIRBNB;
 
--- Create schemas for each layer
-CREATE SCHEMA AIRBNB.STAGING;   -- Raw data landing
-CREATE SCHEMA AIRBNB.BRONZE;    -- dbt bronze layer
-CREATE SCHEMA AIRBNB.SILVER;    -- dbt silver layer
-CREATE SCHEMA AIRBNB.GOLD;      -- dbt gold layer
+-- Create staging schema for raw data
+CREATE SCHEMA AIRBNB.STAGING;
 ```
 
-**2.2 Create Storage Integration**
+**2.2 Create Staging Tables**
 
-A Storage Integration is a Snowflake object that stores IAM credentials for accessing external cloud storage.
+Create tables with proper schema definitions:
 
 ```sql
-CREATE OR REPLACE STORAGE INTEGRATION s3_integration
-  TYPE = EXTERNAL_STAGE
-  STORAGE_PROVIDER = 'S3'
-  ENABLED = TRUE
-  STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::YOUR_ACCOUNT_ID:role/snowflake_role'
-  STORAGE_ALLOWED_LOCATIONS = ('s3://snowbuckethash/');
+USE DATABASE AIRBNB;
+USE SCHEMA STAGING;
 
--- Get the AWS IAM user ARN and External ID (needed for trust relationship)
-DESC INTEGRATION s3_integration;
+-- Hosts table
+CREATE OR REPLACE TABLE HOSTS (
+    host_id NUMBER,
+    host_name STRING,
+    host_since DATE,
+    is_superhost BOOLEAN,
+    response_rate NUMBER,
+    created_at TIMESTAMP,
+    PRIMARY KEY (host_id)
+);
+
+-- Listings table
+CREATE OR REPLACE TABLE LISTINGS (
+    listing_id NUMBER,
+    host_id NUMBER,
+    property_type STRING,
+    room_type STRING,
+    city STRING,
+    country STRING,
+    accommodates NUMBER,
+    bedrooms NUMBER,
+    bathrooms NUMBER,
+    price_per_night NUMBER,
+    created_at TIMESTAMP,
+    PRIMARY KEY (listing_id)
+);
+
+-- Bookings table
+CREATE OR REPLACE TABLE BOOKINGS (
+    booking_id STRING,
+    listing_id NUMBER,
+    booking_date TIMESTAMP,
+    nights_booked NUMBER,
+    booking_amount NUMBER,
+    cleaning_fee NUMBER,
+    service_fee NUMBER,
+    booking_status STRING,
+    created_at TIMESTAMP,
+    PRIMARY KEY (booking_id)
+);
 ```
 
-**2.3 Create External Stage**
+**2.3 Create File Format and External Stage**
 
 ```sql
-CREATE OR REPLACE STAGE airbnb_stage
-  STORAGE_INTEGRATION = s3_integration
-  URL = 's3://snowbuckethash/airbnb/'
-  FILE_FORMAT = (TYPE = CSV FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1);
+-- Create CSV file format
+CREATE FILE FORMAT IF NOT EXISTS csv_format
+  TYPE = 'CSV' 
+  FIELD_DELIMITER = ','
+  SKIP_HEADER = 1
+  ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE;
+
+-- Create external stage pointing to S3
+CREATE OR REPLACE STAGE snowstage
+  FILE_FORMAT = csv_format
+  URL = 's3://snowbuckethash/source/';
+
+-- Verify stage creation
+SHOW STAGES;
 ```
 
-**2.4 Load Data into Staging**
+**2.4 Load Data from S3 into Staging Tables**
 
 ```sql
--- Create staging tables and load data
-CREATE TABLE AIRBNB.STAGING.LISTINGS AS
-SELECT * FROM @airbnb_stage/listings.csv;
+-- Load bookings data
+COPY INTO BOOKINGS
+FROM @snowstage
+FILES = ('bookings.csv')
+CREDENTIALS = (aws_key_id = 'YOUR_AWS_KEY', aws_secret_key = 'YOUR_AWS_SECRET');
 
-CREATE TABLE AIRBNB.STAGING.BOOKINGS AS
-SELECT * FROM @airbnb_stage/bookings.csv;
+-- Load listings data
+COPY INTO LISTINGS
+FROM @snowstage
+FILES = ('listings.csv')
+CREDENTIALS = (aws_key_id = 'YOUR_AWS_KEY', aws_secret_key = 'YOUR_AWS_SECRET');
 
-CREATE TABLE AIRBNB.STAGING.HOSTS AS
-SELECT * FROM @airbnb_stage/hosts.csv;
+-- Load hosts data
+COPY INTO HOSTS
+FROM @snowstage
+FILES = ('hosts.csv')
+CREDENTIALS = (aws_key_id = 'YOUR_AWS_KEY', aws_secret_key = 'YOUR_AWS_SECRET');
+
+-- Verify data loaded
+SELECT * FROM HOSTS;
+SELECT * FROM LISTINGS;
+SELECT * FROM BOOKINGS;
 ```
+
+> ⚠️ **Security Note:** Never commit AWS credentials to version control. Use environment variables or Snowflake's Storage Integration for production environments.
 
 ### Step 3: Python Environment Setup
 
