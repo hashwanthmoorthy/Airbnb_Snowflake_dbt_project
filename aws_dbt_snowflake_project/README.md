@@ -1662,16 +1662,4 @@ dbt docs serve
 
 ---
 
-## 📝 License
 
-This project is for educational purposes.
-
----
-
-## 🤝 Contributing
-
-Feel free to open issues or submit pull requests!
-
----
-
-**Built with ❤️ using dbt + Snowflake**
